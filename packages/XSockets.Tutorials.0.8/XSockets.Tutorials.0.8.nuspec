@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>XSockets.Tutorials</id>
+    <version>0.8</version>
+    <title>XSockets.Tutorials</title>
+    <authors>Uffe Björklund &amp; Magnus Thor</authors>
+    <owners>Uffe Björklund &amp; Magnus Thor</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>A local JavaScript playground for websockets. Contains examples on howto get started with XSockets.NET</description>
+    <summary>A local JavaScript playground for websockets. Contains examples on howto get started with XSockets.NET</summary>
+    <releaseNotes />
+    <copyright>Team XSockets</copyright>
+    <tags>HTML5, JavaScript, Websockets, Realtime, XSockets</tags>
+    <references />
+  </metadata>
+</package>

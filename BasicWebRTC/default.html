@@ -1,0 +1,345 @@
+﻿<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8">
+    <title>XSockets.NET - WebRTC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <!-- Le styles -->
+    <link href="Resources/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
+    <style type="text/css">
+        body {
+            padding-top: 20px;
+            padding-bottom: 40px;
+        }
+
+        /* Custom container */
+        .container-narrow {
+            margin: 0 auto;
+            max-width: 700px;
+        }
+
+            .container-narrow > hr {
+                margin: 30px 0;
+            }
+
+        /* Main marketing message and sign up button */
+        .jumbotron {
+            margin: 30px 0;
+            text-align: center;
+        }
+
+            .jumbotron h1 {
+                font-size: 50px;
+                line-height: 1;
+            }
+
+            .jumbotron .btn {
+                font-size: 16px;
+                padding: 6px 14px;
+            }
+
+        /* Supporting marketing content */
+        .marketing {
+            margin: 30px 0;
+        }
+
+            .marketing p + h4 {
+                margin-top: 28px;
+            }
+    </style>
+    <link href="/Resources/bootstrap/css/bootstrap-responsive.min.css" rel="stylesheet" />
+
+    <script src="/Scripts/jquery-1.9.1.js"></script>
+    <script src="/Scripts/jXSockets.2.3.js"></script>
+    <script src="/Scripts/XSockets.WebRTC.1.0.2.min.js"></script>
+    <script src="/Scripts/Adapter.js"></script>
+    <script src="/Scripts/knockout-2.2.1.js"></script>
+    <script src="/Scripts/Audio.js"></script>
+    <script src="/Scripts/PeerViewModel.js"></script>
+    <!-- Bootstrap-->
+    <script src="/Resources/bootstrap/js/bootstrap.min.js"></script>
+
+    <script>
+
+        //Setup audio...
+        audio = new Audio();
+        audio.load('call', '/Resources/audio/phone-calling.mp3');
+        audio.load('busy', '/Resources/audio/phone-busy.mp3');
+
+        //WebSockets and WebRTC settings
+        var ws = undefined;
+        var webrtc = undefined;
+        var callmanager = undefined;
+        var settings = {
+            dataChannels: false,
+            iceServers: {
+                "iceServers": [{
+                    "url": "stun:stun.l.google.com:19302"
+                }]
+            }
+        };
+        
+        //New ViewModel for Peers
+        var PeerVM = new PeerViewModel();
+
+        $(function () {
+            //Start knockout
+            ko.applyBindings(PeerVM);
+
+            ws = new XSockets.WebSocket("ws://127.0.0.1:4502/PeerBroker", "PeerBroker");
+
+            webrtc = new XSockets.WebRTC(ws, settings);
+
+            //Setup the events we want for webRTC
+            setupWebRTCEvents();
+            
+            //setup CallManager, really just an extension on the WebRTC object to simplify calls
+            setupCallManager();
+
+            //XSockets connection to the controller is open!
+            ws.bind(XSockets.Events.open, function (conn) {                
+                //Set my storageguid
+                PeerVM.Me.StorageGuid = conn.StorageGuid;
+            });
+
+            //Join the Conference room by adding a ScreenName
+            $('#btn-join').bind('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                PeerVM.Me.ScreenName = $('#input-screenname').val().trim();
+
+                if (PeerVM.Me.ScreenName.length === 0) {
+                    $('#input-screenname').focus();
+                    return;
+                }
+
+                $('.jumbotron').fadeOut();
+
+                startWebRTC();
+            });
+
+            //Deny the context offered
+            $('#btn-call-deny').bind('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                $('#callModal').modal('hide');
+                var ctx = $('#callModal').data('ctx');                
+                callmanager.denyCall(ctx);
+                audio.stop();
+            });
+            
+            //Accept the context offered
+            $('#btn-call-accept').bind('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                $('#callModal').modal('hide');
+                var ctx = $('#callModal').data('ctx');                
+                callmanager.acceptCall(ctx);
+            });
+
+            //Stop my stream and remove remote video
+            $('#btn-hangup').bind('click', function() {
+                callmanager.endCall();
+                $('#talk').empty();
+                $(this).fadeOut();
+            });
+        });
+
+var setupWebRTCEvents = function() {
+    webrtc.bind(XSockets.WebRTC.Events.onContextCreated, function (peerContext) {
+        //When we get a context from the server, store it in the viewmodel. This is each clients unique context!
+        PeerVM.Me.Context = peerContext.Context;
+    });
+
+    //When the localstream is ready, attach it to the video element
+    webrtc.bind(XSockets.WebRTC.Events.onlocalStream, function (stream) {
+        attachMediaStream(document.querySelector("#localVideo"), stream);
+    });
+
+    //When remote stream arrive attach it to the remote video element area
+    webrtc.bind(XSockets.WebRTC.Events.onRemoteStream, function (event) {
+        audio.stop();
+        var remoteVideo = $("<video>").addClass("remote-video").attr({
+            width: "212",
+            height: "120",
+            autoplay: "autoplay",
+            controls: "controls",
+            rel: event.StorageGuid
+        });
+        attachMediaStream(remoteVideo.get(0), event.MediaStreamEvent.stream);
+        $("#talk").append(remoteVideo); // Append the video to DOM
+
+        $('#btn-hangup').fadeIn();
+    });
+
+    //When someone leaves, remove the video!
+    webrtc.bind(XSockets.WebRTC.Events.onPeerConnectionLost, function (peerContext) {
+        $("[rel='" + peerContext.StorageGuid + "']").remove();
+
+        if ($('video','#talk').length == 0) {
+            $('#btn-hangup').fadeOut();
+        }
+    });
+};
+
+var setupCallManager = function() {
+    callmanager = new XSockets.WebRTC.CallManager(ws, {
+        events: {
+            onCall: function (peerContext) {                        
+                //Show modal
+                $('#caller', '#callModal').text(peerContext.ScreenName + ' is calling...');
+                $('#callModal').data('ctx', peerContext).modal('show');
+
+                //Play sound
+                audio.play('call');
+            },
+            onAcceptCall: function (peerContext) {
+                webrtc.changeContext(peerContext.Context);
+
+                //stop sound
+                audio.stop();
+            },
+            onDenyCall: function (peerContext) {                        
+                //play busy sound
+                audio.play('busy');
+                setTimeout(function () {
+                    audio.stop();
+                }, 3000);
+            }
+        }
+    });
+};
+
+var startWebRTC = function () {
+
+    webrtc.getUserMedia({
+        audio: true,
+        video: true
+    }, function () {
+        webrtc.ready(PeerVM.Me.ScreenName);
+
+        ws.bind("BrokerPeers", function (arrPeerContext) {                    
+            arrPeerContext.forEach(function (p) {
+                if (p.StorageGuid !== PeerVM.Me.StorageGuid) {
+                    PeerVM.Add(p);
+                }
+            });
+        });
+
+        ws.bind("PeerContextCreated", function (p) {
+            if (p.StorageGuid == PeerVM.Me.StorageGuid) {
+                return;
+            }
+            PeerVM.Add(p);
+        });
+
+        // A Peer disconnects from the PeerBroker
+        ws.bind("PeerContextDestroyed", function (p) {                    
+            PeerVM.Remove(p);
+        });
+
+        // Ask who is here...
+        ws.trigger("PeersOnBroker", {});
+    });
+};
+
+        var call = function(p) {
+            console.log('call', p);
+            callmanager.call(p);
+        };
+
+    </script>
+</head>
+    <body>
+        <div style="position: fixed; right: 10px; top: 10px;">
+            <video id="localVideo" width="120" height="68" autoplay></video>
+            <button id="btn-hangup"  class="hide btn btn-small btn-danger">HangUp</button>            
+        </div>
+
+        <div class="container-narrow">
+
+            <div class="masthead">
+                <ul class="nav nav-pills pull-right">
+                    <li><a href="#aboutModal" data-toggle="modal">About</a></li>
+                </ul>
+                <h3 class="muted">XSockets WebRTC</h3>
+            </div>
+
+            <hr>
+
+            <div class="jumbotron">
+                <h3>Type your name and join in</h3>
+                <input type="text" placeholder="ScreenName" id="input-screenname" value="" />
+                <a class="btn btn-success" id="btn-join" href="#" target="_blank">Join</a>
+            </div>
+
+            <hr>
+
+            <div class="row marketing">
+                <div class="span8" id="talk">
+                </div>
+                <div class="span4">
+                    <table>
+                        <tbody data-bind="foreach:Peers">
+                            <tr>
+                                <td style="width: 200px">
+                                    <span data-bind="text:ScreenName"></span>
+                                </td>
+                                <td>
+                                    <div class="pull-right">
+                                        <a class="btn btn-mini btn-success" href="#" data-bind="click: function(){ call($data);}">Call</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="footer">
+                <p>&copy; XSockets 2013</p>
+            </div>
+
+        </div>
+        <!-- /container -->
+
+        <!-- MODAL //-->
+        <div id="aboutModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                <h3 id="myModalLabel">About</h3>
+            </div>
+            <div class="modal-body">
+                <p>This is another realtime demo from Team &copy; XSockets</p>
+                <p>
+                    Shows howto use XSockets WebRTC-API to build your own video conference
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" data-dismiss="modal" aria-hidden="true">Got it</button>
+            </div>
+        </div>
+    
+        <div id="callModal" class="modal hide fade" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                <h3 id="H1">Someone´s calling</h3>
+            </div>
+            <div class="modal-body">            
+                <p id="caller">
+                
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" id="btn-call-deny" data-dismiss="modal" aria-hidden="true">Deny</button>
+                <button class="btn" id="btn-call-accept" data-dismiss="modal" aria-hidden="true">Accept</button>
+            </div>
+        </div>
+    </body>
+</html>
