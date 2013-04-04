@@ -23,7 +23,7 @@ namespace BasicWebRTC
             RouteConfig.RegisterRoutes(RouteTable.Routes);
             BundleConfig.RegisterBundles(BundleTable.Bundles);
             
-            new BasicWebRTC.XSockets.DebugInstance();
+            //new BasicWebRTC.XSockets.DebugInstance();
         }
     }
 }

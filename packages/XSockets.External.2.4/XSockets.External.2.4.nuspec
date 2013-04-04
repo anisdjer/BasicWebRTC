@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>XSockets.External</id>
+    <version>2.4</version>
+    <title>XSockets.External</title>
+    <authors>Magnus Thor &amp; Uffe Björklund</authors>
+    <owners>Magnus Thor &amp; Uffe Björklund</owners>
+    <projectUrl>http://xsockets.net/</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Provides a socket client for connecting to a XSockets.NET server. This will enable communication from any device talking TCP IP and XSockets.NET.</description>
+    <summary>Provides a socket client for connecting to a XSockets.NET server.</summary>
+    <releaseNotes />
+    <copyright>Team XSockets</copyright>
+    <tags>XSockets, Websockets, Realtime</tags>
+    <dependencies>
+      <dependency id="XSockets.Core" version="2.4" />
+    </dependencies>
+    <references>
+      <reference file="XSockets.External.dll" />
+    </references>
+  </metadata>
+</package>
